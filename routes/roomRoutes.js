@@ -8,12 +8,16 @@ import {
     getHistory,
     claimMilestone,
     closeRoom,
+    getRoomsByHost,
 } from "../controllers/roomController.js";
 
 const router = express.Router();
 
 // POST /api/rooms  -> create a new room
 router.post("/", createRoom);
+
+// GET /api/rooms/host/:hostName  -> get rooms by host name
+router.get("/host/:hostName", getRoomsByHost);
 
 // POST /api/rooms/:code/join  -> join room
 router.post("/:code/join", joinRoom);

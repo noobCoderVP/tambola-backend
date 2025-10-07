@@ -2,7 +2,7 @@ import express from "express";
 import {
     loginUser,
     getAllUsers,
-    updateUser,
+    registerUser,
     deleteUser,
 } from "../controllers/userController.js";
 
@@ -50,7 +50,9 @@ const router = express.Router();
  *       500:
  *         description: Server error
  */
-router.post("/", loginUser);
+router.post("/login", loginUser);
+
+router.post("/register", registerUser);
 
 /**
  * @swagger
@@ -65,42 +67,6 @@ router.post("/", loginUser);
  *         description: Server error
  */
 router.get("/", getAllUsers);
-
-/**
- * @swagger
- * /api/users/{id}:
- *   put:
- *     summary: Update user info (room or socket details)
- *     tags: [Users]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         description: MongoDB user ID
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               socketId:
- *                 type: string
- *               roomCode:
- *                 type: string
- *               isHost:
- *                 type: boolean
- *     responses:
- *       200:
- *         description: Updated user data
- *       404:
- *         description: User not found
- *       500:
- *         description: Server error
- */
-router.put("/:id", updateUser);
 
 /**
  * @swagger
@@ -121,6 +87,6 @@ router.put("/:id", updateUser);
  *       500:
  *         description: Server error
  */
-router.delete("/:id", deleteUser);
+router.delete("/:username", deleteUser);
 
 export default router;

@@ -5,31 +5,26 @@ import { User } from "../models/User.js";
  * - Creates a new user if not existing
  * - Updates socket info and room if provided
  */
-export const loginUser = async (req, res) => {
+export const registerUser = async (req, res) => {
     try {
-        const { name, socketId, roomCode, isHost } = req.body;
+        const { username, password, email } = req.body;
 
-        if (!name?.trim()) {
-            return res.status(400).json({ message: "Name is required" });
+        if (!username?.trim() || !password?.trim()) {
+            return res.status(400).json({ message: "Username and password are required" });
         }
 
-        let user = await User.findOne({ name: name.trim() });
+        let user = await User.findOne({ username: username.trim() });
 
         if (!user) {
             // Create new user
             user = new User({
-                name: name.trim(),
-                socketId: socketId || "",
-                isHost: isHost || false,
-                roomCode: roomCode || "",
+                username: username.trim(),
+                password: password.trim(),
             });
             await user.save();
         } else {
-            // Update existing user with new info
-            user.socketId = socketId || user.socketId;
-            user.isHost = isHost ?? user.isHost;
-            user.roomCode = roomCode || user.roomCode;
-            await user.save();
+            // return response that user already exists
+            return res.status(400).json({ message: "User already exists", user });
         }
 
         res.status(200).json(user);
@@ -38,6 +33,21 @@ export const loginUser = async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 };
+
+export const loginUser = async (req, res) => {
+    try {
+        const { username, password } = req.body;
+
+        const user = await User.findOne({ username: username.trim(), password: password.trim() });
+        if (!user) {
+            return res.status(400).json({ message: "Invalid username or password" });
+        }
+        return res.status(200).json(user);
+    }catch (error) {
+        console.error("Error logging in user:", error);
+        res.status(500).json({ message: "Server error" });
+    }   
+}
 
 /**
  * 👥 Get All Users (optional admin use)
@@ -53,35 +63,12 @@ export const getAllUsers = async (req, res) => {
 };
 
 /**
- * 🔄 Update User Room or Socket Info
- */
-export const updateUser = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { socketId, roomCode, isHost } = req.body;
-
-        const user = await User.findByIdAndUpdate(
-            id,
-            { socketId, roomCode, isHost },
-            { new: true }
-        );
-
-        if (!user) return res.status(404).json({ message: "User not found" });
-
-        res.json(user);
-    } catch (error) {
-        console.error("Error updating user:", error);
-        res.status(500).json({ message: "Server error" });
-    }
-};
-
-/**
  * ❌ Delete User (on disconnect or cleanup)
  */
 export const deleteUser = async (req, res) => {
     try {
-        const { id } = req.params;
-        await User.findByIdAndDelete(id);
+        const { username } = req.params;
+        await User.findOneAndDelete({ username });
         res.json({ message: "User deleted" });
     } catch (error) {
         console.error("Error deleting user:", error);

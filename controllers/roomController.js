@@ -19,34 +19,47 @@ const parseTicketString = (ticketString) => {
     return rows.map((r) => (r === "" ? [] : r.split(",").filter(Boolean)));
 };
 
-/** Create room (hostId required) */
+/** Create room (anyone can host) */
 export const createRoom = async (req, res) => {
     try {
-        const { hostName, roomCode } = req.body;
+        let { hostName, roomCode, socketId } = req.body;
         if (!hostName)
             return res.status(400).json({ message: "hostName required" });
 
-        const host = await User.findOne({ name: hostName });
-        if (!host)
-            return res.status(404).json({ message: "Host user not found" });
+        // 🔹 Find or create host user
+        let host = await User.findOne({ name: hostName });
+        if (!host) {
+            host = await User.create({
+                name: hostName,
+                socketId: socketId || "",
+                isHost: true,
+            });
+        } else {
+            host.socketId = socketId || host.socketId;
+            host.isHost = true;
+            await host.save();
+        }
 
-        // generate unique roomCode (naive loop)
+        // 🔹 Generate unique room code
         roomCode = roomCode || generateRoomCode();
         while (await Room.findOne({ roomCode })) {
             roomCode = generateRoomCode();
         }
 
+        // 🔹 Create room
         const room = new Room({
-            roomCode,
+            code: roomCode,
             host: host._id,
             players: [host._id],
+            isActive: false,
+            calledItems: [],
+            milestonesClaimed: [],
         });
 
         await room.save();
 
-        // update host user roomCode & isHost
+        // 🔹 Update host user info
         host.roomCode = roomCode;
-        host.isHost = true;
         await host.save();
 
         res.status(201).json(room);
@@ -76,12 +89,13 @@ export const joinRoom = async (req, res) => {
                 name: playerName,
                 roomCode,
                 socketId,
-                isHost: false,
+                isHost: String(room.host) === String(playerName), // only host stays true
             });
         } else {
             user.roomCode = roomCode;
             user.socketId = socketId;
-            user.isHost = false;
+            // Preserve host flag if this player is the room host
+            user.isHost = String(room.host) === String(user._id);
             await user.save();
         }
 
@@ -165,6 +179,37 @@ export const callItem = async (req, res) => {
     }
 };
 
+/** Get all rooms hosted by a specific user */
+export const getRoomsByHost = async (req, res) => {
+    try {
+        const { hostName } = req.params;
+        if (!hostName) {
+            return res.status(400).json({ message: "hostName is required" });
+        }
+
+        // find the host user
+        const host = await User.findOne({ name: hostName });
+        if (!host) {
+            return res.status(404).json({ message: "Host not found" });
+        }
+
+        // find all rooms where this user is the host
+        const rooms = await Room.find({ host: host._id })
+            .populate("players", "name")
+            .populate("host", "name");
+
+        if (!rooms || rooms.length === 0) {
+            return res.status(404).json({ message: "No rooms found for this host" });
+        }
+
+        res.json(rooms);
+    } catch (error) {
+        console.error("getRoomsByHost error:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+
 /** Get called history */
 export const getHistory = async (req, res) => {
     try {
@@ -182,11 +227,6 @@ export const getHistory = async (req, res) => {
  * Claim a milestone
  * POST /api/rooms/:roomCode/claim
  * Body: { playerName, type } where type in ["earlyFive","lineTop","lineMiddle","lineBottom","fullHouse"]
- *
- * Verification strategy:
- * - Load user's ticket for the room.
- * - Compare ticket items with room.calledItems to verify claim.
- * - If valid and not already claimed by same user for same type, add to room.milestonesClaimed.
  */
 export const claimMilestone = async (req, res) => {
     try {
@@ -200,18 +240,22 @@ export const claimMilestone = async (req, res) => {
         const room = await Room.findOne({ roomCode });
         if (!room) return res.status(404).json({ message: "Room not found" });
 
-        // fetch ticket
-        const ticket = await Ticket.findOne({ user: playerName, roomCode: roomCode });
+        // Fetch user properly by name
+        const user = await User.findOne({ name: playerName });
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        // Fetch ticket by userId and roomCode
+        const ticket = await Ticket.findOne({
+            user: user._id,
+            roomCode: roomCode,
+        });
         if (!ticket)
             return res
                 .status(404)
                 .json({ message: "Ticket not found for this user in room" });
 
-        const ticketRows = parseTicketString(ticket.ticketString); // array of rows
-        // flatten items
+        const ticketRows = parseTicketString(ticket.ticketString);
         const allItems = ticketRows.flat().filter(Boolean);
-
-        // intersection function
         const calledSet = new Set(room.calledItems);
         const intersectionCount = allItems.filter((it) =>
             calledSet.has(it)
@@ -223,32 +267,23 @@ export const claimMilestone = async (req, res) => {
             case "earlyFive":
                 valid = intersectionCount >= 5;
                 break;
-
             case "lineTop":
-                if (ticketRows[0] && ticketRows[0].length > 0) {
+                if (ticketRows[0] && ticketRows[0].length > 0)
                     valid = ticketRows[0].every((it) => calledSet.has(it));
-                }
                 break;
-
             case "lineMiddle":
-                if (ticketRows[1] && ticketRows[1].length > 0) {
+                if (ticketRows[1] && ticketRows[1].length > 0)
                     valid = ticketRows[1].every((it) => calledSet.has(it));
-                }
                 break;
-
             case "lineBottom":
-                if (ticketRows[2] && ticketRows[2].length > 0) {
+                if (ticketRows[2] && ticketRows[2].length > 0)
                     valid = ticketRows[2].every((it) => calledSet.has(it));
-                }
                 break;
-
             case "fullHouse":
-                // full house: all ticket items called
                 valid =
                     allItems.length > 0 &&
                     allItems.every((it) => calledSet.has(it));
                 break;
-
             default:
                 return res
                     .status(400)
@@ -260,17 +295,16 @@ export const claimMilestone = async (req, res) => {
 
         // check duplicate claim by same user + type
         const already = room.milestonesClaimed.find(
-            (m) => String(m.user) === String(playerName) && m.type === type
+            (m) => String(m.user) === String(user._id) && m.type === type
         );
         if (already)
             return res
                 .status(400)
                 .json({ message: "Milestone already claimed by this user" });
 
-        room.milestonesClaimed.push({ user: playerName, type });
+        room.milestonesClaimed.push({ user: user._id, type });
         await room.save();
 
-        // Optionally you can notify via sockets here (we'll wire sockets in server.js later)
         res.json({ success: true, message: "Claim verified", type });
     } catch (error) {
         console.error("claimMilestone error:", error);
@@ -291,7 +325,13 @@ export const closeRoom = async (req, res) => {
                 .json({ message: "Only host can close the room" });
 
         await Room.deleteOne({ _id: room._id });
-        // optional: clear roomCode and isHost flag on users (left as an exercise)
+
+        // optional cleanup of users
+        await User.updateMany(
+            { roomCode },
+            { $set: { roomCode: null, isHost: false } }
+        );
+
         res.json({ message: "Room closed" });
     } catch (error) {
         console.error("closeRoom error:", error);
