@@ -1,3 +1,4 @@
+import { Room } from "../models/Room.js";
 import { Ticket } from "../models/Ticket.js";
 import { generateTicket } from "../utils/generateTicket.js";
 
@@ -14,6 +15,11 @@ export const createTicket = async (req, res) => {
         const existingTicket = await Ticket.findOne({ username, code });
         if (existingTicket) {
             return res.status(409).json({ message: "Ticket already exists for this username and room" });
+        }
+
+        const room = await Room.findOne({ code });
+        if (room.isActive === false) {
+            return res.status(400).json({ message: "Game is not started yet!" });
         }
 
         const ticketString = generateTicket();

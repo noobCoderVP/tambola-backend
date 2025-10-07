@@ -27,76 +27,32 @@ const io = new Server(server, {
 io.on("connection", (socket) => {
     console.log(`🟢 User connected: ${socket.id}`);
 
-    // --- JOIN ROOM ---
-    socket.on("join-room", async ({ roomCode, userName, isHost }) => {
-        try {
-            let user = await User.findOne({ name: userName });
-            if (!user)
-                user = await User.create({
-                    name: userName,
-                    socketId: socket.id,
-                    isHost,
-                    roomCode,
-                });
-            else
-                (user.socketId = socket.id),
-                    (user.roomCode = roomCode),
-                    await user.save();
-
-            let room = await Room.findOne({ code: roomCode });
-            if (!room && isHost) {
-                room = await Room.create({
-                    code: roomCode,
-                    host: user._id,
-                    players: [user._id],
-                });
-            } else if (room && !room.players.includes(user._id)) {
-                room.players.push(user._id);
-                await room.save();
-            }
-
-            socket.join(roomCode);
-            io.to(roomCode).emit("user-joined", { userName });
-        } catch (err) {
-            console.error(err);
-        }
+    // --- JOIN ROOM EVENT ONLY ---
+    socket.on("user-joined", ({ code, username }) => {
+        socket.join(code);
+        io.to(code).emit("user-joined", username);
     });
 
-    // --- START GAME ---
-    socket.on("start-game", async ({ roomCode }) => {
-        await Room.findOneAndUpdate({ code: roomCode }, { isActive: true });
-        io.to(roomCode).emit("game-started");
+    // --- START GAME EVENT ONLY ---
+    socket.on("game-started", ({ code }) => {
+        console.log(`code ${code} game started`);
+        io.to(code).emit("game-started");
     });
 
-    // --- NEW CODE CALLED ---
-    socket.on("new-code", async ({ roomCode, code }) => {
-        const room = await Room.findOneAndUpdate(
-            { code: roomCode },
-            { $push: { calledCodes: code } },
-            { new: true }
-        );
-        io.to(roomCode).emit("code-called", room.calledCodes);
+    // --- CODE CALLED EVENT ONLY ---
+    socket.on("code-called", ({ code, calledCode }) => {
+        console.log(`Room ${code} called code ${calledCode}`);
+        io.to(code).emit("code-called", calledCode);
     });
 
-    // --- CLAIM EVENT ---
-    socket.on("claim", async ({ roomCode, userName, claimType }) => {
-        const user = await User.findOne({ name: userName });
-        const room = await Room.findOne({ code: roomCode });
-
-        room.claims.push({ user: user._id, claimType });
-        await room.save();
-
-        // Alert host (host can verify later)
-        io.to(roomCode).emit("claim-received", { userName, claimType });
+    // --- CLAIM EVENT ONLY ---
+    socket.on("claim-received", ({ code, username, claimType }) => {
+        io.to(code).emit("claim-received", { username, claimType });
     });
 
-    // --- DISCONNECT ---
-    socket.on("disconnect", async () => {
-        const user = await User.findOneAndUpdate(
-            { socketId: socket.id },
-            { socketId: null }
-        );
-        if (user) console.log(`🔴 User disconnected: ${user.name}`);
+    // --- DISCONNECT LOGGING ---
+    socket.on("disconnect", () => {
+        console.log(`🔴 Socket disconnected: ${socket.id}`);
     });
 });
 

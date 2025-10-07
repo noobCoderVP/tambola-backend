@@ -9,13 +9,8 @@ const roomSchema = new mongoose.Schema(
         isActive: { type: Boolean, default: false },
         claims: [
             {
-                user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-                claimType: { type: String },
-                status: {
-                    type: String,
-                    enum: ["pending", "accepted", "rejected"],
-                    default: "pending",
-                },
+                username: { type: String, required: true },
+                claimType: { type: String }
             },
         ],
     },

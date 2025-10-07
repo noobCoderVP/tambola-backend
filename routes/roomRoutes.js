@@ -5,10 +5,10 @@ import {
     getRoom,
     startGame,
     callItem,
-    getHistory,
     claimMilestone,
     closeRoom,
     getRoomsByHost,
+    verifyMilestone,
 } from "../controllers/roomController.js";
 
 const router = express.Router();
@@ -31,11 +31,11 @@ router.post("/:code/start", startGame);
 // POST /api/rooms/:code/call -> host calls next item { hostId, item }
 router.post("/:code/call", callItem);
 
-// GET /api/rooms/:code/history -> returns calledItems
-router.get("/:code/history", getHistory);
-
 // POST /api/rooms/:code/claim -> user claims milestone { userId, type }
 router.post("/:code/claim", claimMilestone);
+
+// POST /api/rooms/:code/verify-claim -> host verifies claim { claimId, action }
+router.post("/:code/verify-claim", verifyMilestone);
 
 // POST /api/rooms/:code/close -> close/delete room (host only)
 router.post("/:code/close", closeRoom);
