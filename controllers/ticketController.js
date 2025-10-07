@@ -10,6 +10,12 @@ export const createTicket = async (req, res) => {
             return res.status(400).json({ message: "Missing required fields" });
         }
 
+        // Check if ticket already exists for user & roomCode
+        const existingTicket = await Ticket.findOne({ user, roomCode });
+        if (existingTicket) {
+            return res.status(409).json({ message: "Ticket already exists for this user and room" });
+        }
+
         const ticketString = generateTicket();
 
         const newTicket = new Ticket({
@@ -59,6 +65,24 @@ export const markItem = async (req, res) => {
         res.json(ticket);
     } catch (error) {
         console.error("Error marking item:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+// 🧾 Get ticket by user and roomCode
+export const getTicketByUserAndRoom = async (req, res) => {
+    try {
+        const { user, roomCode } = req.query;
+        if (!user || !roomCode) {
+            return res.status(400).json({ message: "Missing user or roomCode" });
+        }
+        const ticket = await Ticket.findOne({ user, roomCode });
+        if (!ticket) {
+            return res.status(404).json({ message: "Ticket not found" });
+        }
+        res.json(ticket);
+    } catch (error) {
+        console.error("Error fetching ticket:", error);
         res.status(500).json({ message: "Server error" });
     }
 };
