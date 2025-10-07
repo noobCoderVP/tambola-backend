@@ -2,11 +2,11 @@ import mongoose from "mongoose";
 
 const ticketSchema = new mongoose.Schema(
     {
-        user: {
+        username: {
             type: String,
             required: true,
         },
-        roomCode: { type: String, required: true },
+        code: { type: String, required: true },
 
         // Ticket as a single string, rows separated by "\" and elements in row separated by ","
         ticketString: {

@@ -4,23 +4,23 @@ import { generateTicket } from "../utils/generateTicket.js";
 // 🎟️ Create a new ticket
 export const createTicket = async (req, res) => {
     try {
-        const { user, roomCode } = req.body;
+        const { username, code } = req.body;
 
-        if (!user || !roomCode) {
+        if (!username || !code) {
             return res.status(400).json({ message: "Missing required fields" });
         }
 
-        // Check if ticket already exists for user & roomCode
-        const existingTicket = await Ticket.findOne({ user, roomCode });
+        // Check if ticket already exists for username & code
+        const existingTicket = await Ticket.findOne({ username, code });
         if (existingTicket) {
-            return res.status(409).json({ message: "Ticket already exists for this user and room" });
+            return res.status(409).json({ message: "Ticket already exists for this username and room" });
         }
 
         const ticketString = generateTicket();
 
         const newTicket = new Ticket({
-            user,
-            roomCode,
+            username,
+            code,
             ticketString,
         });
 
@@ -35,9 +35,9 @@ export const createTicket = async (req, res) => {
 // 🧾 Get all tickets for a room
 export const getTicketsByRoom = async (req, res) => {
     try {
-        const { roomCode } = req.params;
-        const tickets = await Ticket.find({ roomCode }).populate(
-            "user",
+        const { code } = req.params;
+        const tickets = await Ticket.find({ code }).populate(
+            "username",
             "name"
         );
         res.json(tickets);
@@ -51,17 +51,14 @@ export const getTicketsByRoom = async (req, res) => {
 export const markItem = async (req, res) => {
     try {
         const { ticketId } = req.params;
-        const { item } = req.body;
+        const { markedItems } = req.body;
 
         const ticket = await Ticket.findById(ticketId);
         if (!ticket)
             return res.status(404).json({ message: "Ticket not found" });
 
-        if (!ticket.markedItems.includes(item)) {
-            ticket.markedItems.push(item);
-            await ticket.save();
-        }
-
+        ticket.markedItems = markedItems;
+        await ticket.save();
         res.json(ticket);
     } catch (error) {
         console.error("Error marking item:", error);
@@ -69,14 +66,14 @@ export const markItem = async (req, res) => {
     }
 };
 
-// 🧾 Get ticket by user and roomCode
+// 🧾 Get ticket by username and code
 export const getTicketByUserAndRoom = async (req, res) => {
     try {
-        const { user, roomCode } = req.query;
-        if (!user || !roomCode) {
-            return res.status(400).json({ message: "Missing user or roomCode" });
+        const { username, code } = req.query;
+        if (!username || !code) {
+            return res.status(400).json({ message: "Missing username or code" });
         }
-        const ticket = await Ticket.findOne({ user, roomCode });
+        const ticket = await Ticket.findOne({ username, code });
         if (!ticket) {
             return res.status(404).json({ message: "Ticket not found" });
         }

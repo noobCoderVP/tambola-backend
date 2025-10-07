@@ -2,7 +2,7 @@ import { Room } from "../models/Room.js";
 import { User } from "../models/User.js";
 import { Ticket } from "../models/Ticket.js";
 
-/** Helper: generate a short room roomCode (simple) */
+/** Helper: generate a short room code (simple) */
 const generateRoomCode = (len = 4) => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let out = "";
@@ -22,45 +22,37 @@ const parseTicketString = (ticketString) => {
 /** Create room (anyone can host) */
 export const createRoom = async (req, res) => {
     try {
-        let { hostName, roomCode, socketId } = req.body;
-        if (!hostName)
-            return res.status(400).json({ message: "hostName required" });
+        let { host, code } = req.body;
+        if (!host)
+            return res.status(400).json({ message: "host required" });
 
         // 🔹 Find or create host user
-        let host = await User.findOne({ name: hostName });
-        if (!host) {
-            host = await User.create({
-                name: hostName,
-                socketId: socketId || "",
-                isHost: true,
-            });
-        } else {
-            host.socketId = socketId || host.socketId;
-            host.isHost = true;
-            await host.save();
+        const hostFound = await User.find({ username: host });
+        if (!hostFound) {
+            return res.status(400).json({ message: "Please register the host user first." });
         }
 
+        const existingRoom = await Room.find({ code: code, isActive: true });
+        if(existingRoom)
+            return res.status(400).json({ message: "Room code already in use. Please choose a different code." });
+
         // 🔹 Generate unique room code
-        roomCode = roomCode || generateRoomCode();
-        while (await Room.findOne({ roomCode })) {
-            roomCode = generateRoomCode();
+        code = code || generateRoomCode();
+        while (await Room.find({ code })) {
+            code = generateRoomCode();
         }
 
         // 🔹 Create room
         const room = new Room({
-            code: roomCode,
-            host: host._id,
-            players: [host._id],
+            code: code,
+            host: hostFound.username,
+            players: [],
             isActive: false,
             calledItems: [],
             milestonesClaimed: [],
         });
 
         await room.save();
-
-        // 🔹 Update host user info
-        host.roomCode = roomCode;
-        await host.save();
 
         res.status(201).json(room);
     } catch (error) {
@@ -72,39 +64,26 @@ export const createRoom = async (req, res) => {
 /** Join a room */
 export const joinRoom = async (req, res) => {
     try {
-        const { roomCode } = req.params;
-        const { playerName, socketId } = req.body;
+        const { code } = req.params;
+        const { player, socketId } = req.body;
 
-        if (!playerName)
-            return res.status(400).json({ message: "playerName required" });
+        if (!player)
+            return res.status(400).json({ message: "player required" });
 
-        const room = await Room.findOne({ roomCode });
+        const room = await Room.findOne({ code });
         if (!room) return res.status(404).json({ message: "Room not found" });
 
         // Try to find user by name
-        let user = await User.findOne({ name: playerName });
-        if (!user) {
-            // Create user if not exists
-            user = await User.create({
-                name: playerName,
-                roomCode,
-                socketId,
-                isHost: String(room.host) === String(playerName), // only host stays true
-            });
-        } else {
-            user.roomCode = roomCode;
-            user.socketId = socketId;
-            // Preserve host flag if this player is the room host
-            user.isHost = String(room.host) === String(user._id);
-            await user.save();
-        }
+        let user = await User.findOne({ username: player });
+        if(!user)
+            return res.status(404).json({ message: "User not found. Please register first." });
 
         // Add if not already present
-        if (!room.players.map(String).includes(String(user._id))) {
-            room.players.push(user._id);
+        if (!room.players.map(String).includes(String(user.username))) {
+            room.players.push(user.username);
             await room.save();
         }
-
+        
         res.json(room);
     } catch (error) {
         console.error("joinRoom error:", error);
@@ -115,10 +94,8 @@ export const joinRoom = async (req, res) => {
 /** Get room detail (populate players & host) */
 export const getRoom = async (req, res) => {
     try {
-        const { roomCode } = req.params;
-        const room = await Room.findOne({ roomCode })
-            .populate("host", "name")
-            .populate("players", "name");
+        const { code } = req.params;
+        const room = await Room.findOne({ code });
         if (!room) return res.status(404).json({ message: "Room not found" });
         res.json(room);
     } catch (error) {
@@ -130,11 +107,11 @@ export const getRoom = async (req, res) => {
 /** Start game (host only) -> set isActive true and clear history */
 export const startGame = async (req, res) => {
     try {
-        const { roomCode } = req.params;
-        const { hostId } = req.body;
-        const room = await Room.findOne({ roomCode });
+        const { code } = req.params;
+        const { host } = req.body;
+        const room = await Room.findOne({ code });
         if (!room) return res.status(404).json({ message: "Room not found" });
-        if (String(room.host) !== String(hostId))
+        if (String(room.host) !== String(host))
             return res
                 .status(403)
                 .json({ message: "Only host can start the game" });
@@ -151,17 +128,18 @@ export const startGame = async (req, res) => {
     }
 };
 
-/** Call next item (host action). Body: { hostId, itemCode } */
+/** Call next item (host action). Body: { host, itemCode } */
 export const callItem = async (req, res) => {
     try {
-        const { roomCode } = req.params;
-        const { hostId, item } = req.body;
+        const { code } = req.params;
+        const { host, item } = req.body;
         if (!item)
-            return res.status(400).json({ message: "item roomCode required" });
+            return res.status(400).json({ message: "item code required" });
 
-        const room = await Room.findOne({ roomCode });
+        const room = await Room.findOne({ code });
         if (!room) return res.status(404).json({ message: "Room not found" });
-        if (String(room.host) !== String(hostId))
+
+        if (String(room.host) !== String(host))
             return res
                 .status(403)
                 .json({ message: "Only host can call items" });
@@ -182,21 +160,19 @@ export const callItem = async (req, res) => {
 /** Get all rooms hosted by a specific user */
 export const getRoomsByHost = async (req, res) => {
     try {
-        const { hostName } = req.params;
-        if (!hostName) {
-            return res.status(400).json({ message: "hostName is required" });
+        const { host } = req.params;
+        if (!host) {
+            return res.status(400).json({ message: "host is required" });
         }
 
         // find the host user
-        const host = await User.findOne({ name: hostName });
-        if (!host) {
+        const hostFound = await User.findOne({ username: host });
+        if (!hostFound) {
             return res.status(404).json({ message: "Host not found" });
         }
 
         // find all rooms where this user is the host
-        const rooms = await Room.find({ host: host._id })
-            .populate("players", "name")
-            .populate("host", "name");
+        const rooms = await Room.find({ host });
 
         if (!rooms || rooms.length === 0) {
             return res.status(404).json({ message: "No rooms found for this host" });
@@ -213,8 +189,8 @@ export const getRoomsByHost = async (req, res) => {
 /** Get called history */
 export const getHistory = async (req, res) => {
     try {
-        const { roomCode } = req.params;
-        const room = await Room.findOne({ roomCode });
+        const { code } = req.params;
+        const room = await Room.findOne({ code });
         if (!room) return res.status(404).json({ message: "Room not found" });
         res.json({ calledItems: room.calledItems });
     } catch (error) {
@@ -225,29 +201,29 @@ export const getHistory = async (req, res) => {
 
 /**
  * Claim a milestone
- * POST /api/rooms/:roomCode/claim
- * Body: { playerName, type } where type in ["earlyFive","lineTop","lineMiddle","lineBottom","fullHouse"]
+ * POST /api/rooms/:code/claim
+ * Body: { player, type } where type in ["earlyFive","lineTop","lineMiddle","lineBottom","fullHouse"]
  */
 export const claimMilestone = async (req, res) => {
     try {
-        const { roomCode } = req.params;
-        const { playerName, type } = req.body;
-        if (!playerName || !type)
+        const { code } = req.params;
+        const { player, type } = req.body;
+        if (!player || !type)
             return res
                 .status(400)
-                .json({ message: "playerName and type required" });
+                .json({ message: "player and type required" });
 
-        const room = await Room.findOne({ roomCode });
+        const room = await Room.findOne({ code });
         if (!room) return res.status(404).json({ message: "Room not found" });
 
         // Fetch user properly by name
-        const user = await User.findOne({ name: playerName });
+        const user = await User.findOne({ name: player });
         if (!user) return res.status(404).json({ message: "User not found" });
 
-        // Fetch ticket by userId and roomCode
+        // Fetch ticket by userId and code
         const ticket = await Ticket.findOne({
-            user: user._id,
-            roomCode: roomCode,
+            user: user.username,
+            code: code,
         });
         if (!ticket)
             return res
@@ -295,14 +271,14 @@ export const claimMilestone = async (req, res) => {
 
         // check duplicate claim by same user + type
         const already = room.milestonesClaimed.find(
-            (m) => String(m.user) === String(user._id) && m.type === type
+            (m) => String(m.user) === String(user.username) && m.type === type
         );
         if (already)
             return res
                 .status(400)
                 .json({ message: "Milestone already claimed by this user" });
 
-        room.milestonesClaimed.push({ user: user._id, type });
+        room.milestonesClaimed.push({ user: user.username, type });
         await room.save();
 
         res.json({ success: true, message: "Claim verified", type });
@@ -315,22 +291,16 @@ export const claimMilestone = async (req, res) => {
 /** Close or delete a room (host only) */
 export const closeRoom = async (req, res) => {
     try {
-        const { roomCode } = req.params;
-        const { hostId } = req.body;
-        const room = await Room.findOne({ roomCode });
+        const { code } = req.params;
+        const { host } = req.body;
+        const room = await Room.findOne({ code });
         if (!room) return res.status(404).json({ message: "Room not found" });
-        if (String(room.host) !== String(hostId))
+        if (String(room.host) !== String(host))
             return res
                 .status(403)
                 .json({ message: "Only host can close the room" });
 
-        await Room.deleteOne({ _id: room._id });
-
-        // optional cleanup of users
-        await User.updateMany(
-            { roomCode },
-            { $set: { roomCode: null, isHost: false } }
-        );
+        await Room.deleteOne({ code: room.code });
 
         res.json({ message: "Room closed" });
     } catch (error) {

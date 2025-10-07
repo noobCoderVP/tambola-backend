@@ -15,9 +15,12 @@ router.post("/", createTicket);
 router.get("/", getTicketByUserAndRoom);
 
 // GET /api/tickets/room/:roomCode — Get tickets by room
-router.get("/room/:roomCode", getTicketsByRoom);
+router.get("/room/:code", getTicketsByRoom);
 
 // PATCH /api/tickets/:ticketId/mark — Mark an item in ticket
 router.patch("/:ticketId/mark", markItem);
+
+// PATCH /api/tickets/:ticketId/unmark — Unmark an item in ticket
+router.patch("/:ticketId/unmark", markItem);
 
 export default router;

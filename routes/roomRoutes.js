@@ -17,7 +17,7 @@ const router = express.Router();
 router.post("/", createRoom);
 
 // GET /api/rooms/host/:hostName  -> get rooms by host name
-router.get("/host/:hostName", getRoomsByHost);
+router.get("/host/:host", getRoomsByHost);
 
 // POST /api/rooms/:code/join  -> join room
 router.post("/:code/join", joinRoom);

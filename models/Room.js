@@ -2,9 +2,9 @@ import mongoose from "mongoose";
 
 const roomSchema = new mongoose.Schema(
     {
-        code: { type: String, required: true, unique: true },
+        code: { type: String, required: true },
         host: { type: String, required: true },
-        players: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+        players: [{ type: String }],
         calledCodes: [{ type: String }], // All codes announced by host
         isActive: { type: Boolean, default: false },
         claims: [
