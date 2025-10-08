@@ -10,7 +10,8 @@ const roomSchema = new mongoose.Schema(
         claims: [
             {
                 username: { type: String, required: true },
-                claimType: { type: String }
+                claimType: { type: String },
+                claimedAt: { type: Date, default: Date.now },
             },
         ],
     },

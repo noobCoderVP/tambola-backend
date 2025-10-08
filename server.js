@@ -46,8 +46,9 @@ io.on("connection", (socket) => {
     });
 
     // --- CLAIM EVENT ONLY ---
-    socket.on("claim-received", ({ code, username, claimType }) => {
-        io.to(code).emit("claim-received", { username, claimType });
+    socket.on("claim-received", ({ code, player, type }) => {
+        console.log(`Room ${code} claim received from ${player} for ${type}`);
+        io.to(code).emit("claim-received", { player, type });
     });
 
     // --- DISCONNECT LOGGING ---

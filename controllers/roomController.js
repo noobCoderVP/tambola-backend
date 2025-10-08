@@ -214,35 +214,16 @@ export const getHistory = async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 };
+
 /** Player raises a milestone claim */
-export const claimMilestone = async (req, res) => {
+export const fetchClaims = async (req, res) => {
     try {
         const { code } = req.params;
-        const { player, type } = req.body;
-
-        if (!player || !type)
-            return res.status(400).json({ message: "player and type required" });
-
         const room = await Room.findOne({ code });
         if (!room) return res.status(404).json({ message: "Room not found" });
-
-        // Prevent duplicate claim (pending or already accepted)
-        const existing = room.claims.find(
-            (c) =>
-                c.username === player &&
-                c.claimType === type &&
-                c.status !== "rejected"
-        );
-        if (existing)
-            return res.status(400).json({ message: "Claim already pending or accepted" });
-
-        // Add new pending claim
-        room.claims.push({ username: player, claimType: type, status: "pending" });
-        await room.save();
-
-        res.json({ success: true, message: "Claim raised — pending host verification" });
+        res.status(200).json(room.claims);
     } catch (error) {
-        console.error("claimMilestone error:", error);
+        console.error("fetchClaims error:", error);
         res.status(500).json({ message: "Server error" });
     }
 };
@@ -278,13 +259,13 @@ export const verifyMilestone = async (req, res) => {
             case "First Five":
                 valid = allItems.filter((it) => calledSet.has(it)).length >= 5;
                 break;
-            case "Line Top":
+            case "First Column":
                 valid = ticketRows[0]?.every((it) => calledSet.has(it));
                 break;
-            case "Line Middle":
+            case "Second Column":
                 valid = ticketRows[1]?.every((it) => calledSet.has(it));
                 break;
-            case "Line Bottom":
+            case "Third Column":
                 valid = ticketRows[2]?.every((it) => calledSet.has(it));
                 break;
             case "Full House":
@@ -299,10 +280,10 @@ export const verifyMilestone = async (req, res) => {
 
         // Find pending claim
         const claim = room.claims.find(
-            (c) => c.username === player || c.claimType === type
+            (c) => c.username === player && c.claimType === type
         );
         if (claim)
-            return res.status(400).json({ message: "No pending claim found for this type or User is already a winner!" });
+            return res.status(400).json({ message: "You have already claimed this milestone!" });
 
         room.claims.push({username: player, claimType: type});
         await room.save();

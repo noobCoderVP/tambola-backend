@@ -12,7 +12,9 @@ const SYMBOL_CODES = Object.keys(diwaliSymbols);
 export const generateTicket = () => {
     while (true) {
         const ticket = buildTicket();
-        if (validateTicket(ticket)) return ticket;
+        if (validateTicket(ticket)) {
+            return formatTicket(ticket);
+        }
     }
 };
 
@@ -24,7 +26,7 @@ const buildTicket = () => {
     const ticket = [];
 
     for (let r = 0; r < 3; r++) {
-        const row = Array(9).fill("");
+        const row = Array(9).fill("*");
         const filledCols = getRandomColumns(9, 5);
 
         for (const c of filledCols) {
@@ -55,7 +57,7 @@ const validateTicket = (ticket) => {
 
     for (let r = 0; r < 3; r++) {
         for (let c = 0; c < 9; c++) {
-            if (ticket[r][c]) colFillCount[c]++;
+            if (ticket[r][c] !== "*") colFillCount[c]++;
         }
     }
 
@@ -64,7 +66,7 @@ const validateTicket = (ticket) => {
 
     // Each row must have exactly 5 symbols
     for (let r = 0; r < 3; r++) {
-        const rowCount = ticket[r].filter(Boolean).length;
+        const rowCount = ticket[r].filter((cell) => cell !== "*").length;
         if (rowCount !== 5) return false;
     }
 
@@ -84,7 +86,7 @@ const getRandomColumns = (total, pick) => {
 };
 
 /**
- * 🧩 Format ticket as string "A,B,,C,...\E,,,...\..." for DB storage
+ * 🧩 Format ticket as string "A,B,*,C,...\E,*,...\" for DB storage
  */
 export const formatTicket = (ticket) => {
     return ticket.map((row) => row.join(",")).join("\\");
@@ -104,7 +106,7 @@ export const printTicket = (ticket) => {
 
     ticket.forEach((row) => {
         const formattedRow = row
-            .map((cell) => (cell ? cell.padEnd(3, " ") : "   "))
+            .map((cell) => (cell === "*" ? "   " : cell.padEnd(3, " ")))
             .join(" | ");
         console.log(`| ${formattedRow} |`);
     });

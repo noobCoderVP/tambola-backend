@@ -5,7 +5,7 @@ import {
     getRoom,
     startGame,
     callItem,
-    claimMilestone,
+    fetchClaims,
     closeRoom,
     getRoomsByHost,
     verifyMilestone,
@@ -31,8 +31,8 @@ router.post("/:code/start", startGame);
 // POST /api/rooms/:code/call -> host calls next item { hostId, item }
 router.post("/:code/call", callItem);
 
-// POST /api/rooms/:code/claim -> user claims milestone { userId, type }
-router.post("/:code/claim", claimMilestone);
+// GET /api/rooms/:code/milestones -> fetch all claims for this room (host only)
+router.get("/:code/leaderboard", fetchClaims);
 
 // POST /api/rooms/:code/verify-claim -> host verifies claim { claimId, action }
 router.post("/:code/verify-claim", verifyMilestone);
