@@ -252,6 +252,7 @@ export const verifyMilestone = async (req, res) => {
         const ticketRows = parseTicketString(ticket.ticketString);
         const allItems = ticketRows.flat().filter(Boolean);
         const calledSet = new Set(room.calledCodes);
+        calledSet.add("*");
 
         let valid = false;
 
