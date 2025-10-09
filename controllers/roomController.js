@@ -309,7 +309,7 @@ export const verifyMilestone = async (req, res) => {
 
         switch (type) {
             case "First Five":
-                valid = allItems.filter((it) => calledSet.has(it)).length >= 5;
+                valid = allItems.filter((it) => calledSet.has(it) && it != "*").length >= 5;
                 break;
             case "First Column":
                 valid = ticketRows[0]?.every((it) => calledSet.has(it));
