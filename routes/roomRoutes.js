@@ -9,6 +9,8 @@ import {
     closeRoom,
     getRoomsByHost,
     verifyMilestone,
+    removePlayerFromRoom,
+    getPlayersInRoom
 } from "../controllers/roomController.js";
 
 const router = express.Router();
@@ -27,6 +29,12 @@ router.get("/:code", getRoom);
 
 // POST /api/rooms/:code/start -> start the game (host only)
 router.post("/:code/start", startGame);
+
+// GET /api/rooms/:code/players -> fetch all players in this room
+router.get("/:code/players", getPlayersInRoom);
+
+// POST /api/rooms/:code/remove-player -> remove a player from room (host only) body { host, player }
+router.post("/:code/remove-player", removePlayerFromRoom);
 
 // POST /api/rooms/:code/call -> host calls next item { hostId, item }
 router.post("/:code/call", callItem);

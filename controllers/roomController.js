@@ -23,9 +23,9 @@ const parseTicketString = (ticketString) => {
 /** Create room (anyone can host) */
 export const createRoom = async (req, res) => {
     try {
-        let { host, code } = req.body;
-        if (!host)
-            return res.status(400).json({ message: "host required" });
+        let { host, code, password } = req.body;
+        if (!host || !password)
+            return res.status(400).json({ message: "host and password are required" });
 
         // 🔹 Find or create host user
         const hostFound = await User.find({ username: host });
@@ -33,13 +33,14 @@ export const createRoom = async (req, res) => {
             return res.status(400).json({ message: "Please register the host user first." });
         }
 
-        const existingRoom = await Room.find({ code: code, isActive: true });
+        const existingRoom = await Room.find({ code: code });
         if(existingRoom.length > 0)
-            return res.status(400).json({ message: "Room code already in use. Please choose a different code." });
+            return res.status(400).json({ message: "Room code already used. Please choose a different code." });
 
         // 🔹 Create room
         const room = new Room({
             code: code,
+            password: password,
             host: host,
             players: [],
             isActive: false,
@@ -60,18 +61,25 @@ export const createRoom = async (req, res) => {
 export const joinRoom = async (req, res) => {
     try {
         const { code } = req.params;
-        const { player, socketId } = req.body;
+        const { player, password } = req.body;
 
-        if (!player)
-            return res.status(400).json({ message: "player required" });
+        if (!player || !password || !code)
+            return res.status(400).json({ message: "player, password and code are required" });
 
         const room = await Room.findOne({ code });
         if (!room) return res.status(404).json({ message: "Room not found" });
+
+        if (room.password !== password)
+            return res.status(403).json({ message: "Incorrect password" });
 
         // Try to find user by name
         let user = await User.findOne({ username: player });
         if(!user)
             return res.status(404).json({ message: "User not found. Please register first." });
+
+        // if room is closed
+        if(room.isClosed)
+            return res.status(400).json({ message: "Room is closed. You cannot join." });
 
         // Add if not already present
         if (!room.players.map(String).includes(String(user.username))) {
@@ -82,6 +90,49 @@ export const joinRoom = async (req, res) => {
         res.json(room);
     } catch (error) {
         console.error("joinRoom error:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+/** Get all players in a room */
+export const getPlayersInRoom = async (req, res) => {
+    try {
+        const { code } = req.params;
+        const room = await Room.findOne({ code });
+        if (!room) return res.status(404).json({ message: "Room not found" });
+        res.json(room.players);
+    } catch (error) {
+        console.error("getPlayersInRoom error:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+/** POST Remove a player from a room */
+export const removePlayerFromRoom = async (req, res) => {
+    try {
+        const { code } = req.params;
+        const { player, host } = req.body;
+
+        if (!player || !host)
+            return res.status(400).json({ message: "player and host are required" });
+
+        const room = await Room.findOne({ code });
+        if (!room) return res.status(404).json({ message: "Room not found" });
+
+        // if room host is not the same as requester
+        if (String(room.host) !== String(host))
+            return res.status(403).json({ message: "Only host can remove players" });
+
+        // Remove player if exists
+        room.players = room.players.filter(p => p !== player);
+
+        // remove ticket from the database
+        await Ticket.deleteOne({ username: player, code });
+        await room.save();
+
+        res.json(room);
+    } catch (error) {
+        console.error("removePlayerFromRoom error:", error);
         res.status(500).json({ message: "Server error" });
     }
 };
@@ -313,8 +364,8 @@ export const closeRoom = async (req, res) => {
                 .status(403)
                 .json({ message: "Only host can close the room" });
 
-        await Room.deleteOne({ code: room.code });
-
+        room.isClosed = true;
+        await room.save();
         res.json({ message: "Room closed" });
     } catch (error) {
         console.error("closeRoom error:", error);
